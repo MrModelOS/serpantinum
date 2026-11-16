@@ -24,6 +24,29 @@ GuideTab {
     property bool layoutReconciled: false
     property var customDescriptions: ({})
     property var customBinds: []
+    property var trashList: []
+    property var lastDeleted: null
+    readonly property int trashDays: 30
+    readonly property bool filterFocused: filterInput.hasFocus
+    readonly property bool anyPopupOpen: customPopup.opened || editPopup.opened || emptyTrashPopup.opened
+
+    readonly property var trashView: {
+        let list = keybindsTabRoot.trashList || [];
+        return list.map(function(item) {
+            if (!item || typeof item === "string") {
+                return { key: String(item || ""), description: "", command: "", kind: "builtin", deletedAt: 0 };
+            }
+            let copy = Object.assign({}, item);
+            copy.kind = copy.kind || "builtin";
+            return copy;
+        }).filter(function(item) { return item.key !== ""; });
+    }
+
+    function daysLeft(item) {
+        if (!item || !item.deletedAt) return keybindsTabRoot.trashDays;
+        let elapsed = Date.now() - item.deletedAt;
+        return Math.max(0, keybindsTabRoot.trashDays - Math.floor(elapsed / 86400000));
+    }
 
     readonly property var visibleBinds: {
         let query = keybindsTabRoot.bindFilter.trim().toLowerCase();
@@ -36,6 +59,45 @@ GuideTab {
 
     readonly property var layoutOptions: ["tiling", "mixed", "floating"]
 
+    function saveKeybinds(keybinds) {
+        if (typeof Config === "undefined" || !Config.setSetting) return;
+        Config.setSetting("keybinds", keybinds);
+    }
+
+    function ensureTrash(keybinds) {
+        if (keybinds && Array.isArray(keybinds.trash)) return keybinds;
+        let trash = [];
+        let removed = keybinds && Array.isArray(keybinds.removed) ? keybinds.removed : [];
+        for (let i = 0; i < removed.length; i++) {
+            let item = removed[i];
+            let key = typeof item === "string" ? item : (item ? item.key : "");
+            if (!key) continue;
+            trash.push({
+                key: key,
+                description: (item && typeof item === "object") ? (item.description || "") : "",
+                kind: "builtin",
+                deletedAt: Date.now()
+            });
+        }
+        keybinds.trash = trash;
+        keybindsTabRoot.saveKeybinds(keybinds);
+        return keybinds;
+    }
+
+    function purgeTrash(keybinds) {
+        let trash = keybinds && Array.isArray(keybinds.trash) ? keybinds.trash : [];
+        let cutoff = Date.now() - keybindsTabRoot.trashDays * 86400000;
+        let fresh = trash.filter(function(item) {
+            if (!item || typeof item === "string" || !item.deletedAt) return true;
+            return item.deletedAt >= cutoff;
+        });
+        if (fresh.length !== trash.length) {
+            keybinds.trash = fresh;
+            keybindsTabRoot.saveKeybinds(keybinds);
+        }
+        return fresh;
+    }
+
     function syncSettings() {
         let settings = (typeof Config !== "undefined" && Config.getSetting)
             ? Config.getSetting("windowLayout", keybindsTabRoot.defaultWindowLayout)
@@ -47,6 +109,7 @@ GuideTab {
         let keybinds = (typeof Config !== "undefined" && Config.getSetting)
             ? Config.getSetting("keybinds", ({}))
             : ({});
+        keybinds = keybindsTabRoot.ensureTrash(keybinds);
         let descriptions = keybinds && keybinds.descriptions && typeof keybinds.descriptions === "object"
             ? keybinds.descriptions
             : ({});
@@ -54,6 +117,8 @@ GuideTab {
 
         let custom = keybinds && Array.isArray(keybinds.custom) ? keybinds.custom : [];
         keybindsTabRoot.customBinds = custom;
+
+        keybindsTabRoot.trashList = keybindsTabRoot.purgeTrash(keybinds);
     }
 
     function setLayoutMode(mode) {
@@ -334,15 +399,53 @@ GuideTab {
         keybindsTabRoot.syncCustomBinds();
     }
 
+    function comboOf(item) {
+        if (!item) return "";
+        return typeof item === "string" ? item : (item.key || "");
+    }
+
+    function trashRecord(item) {
+        return {
+            id: item.id || "",
+            key: item.key,
+            command: item.command || "",
+            description: item.description || "",
+            kind: item.kind || "builtin",
+            deletedAt: Date.now()
+        };
+    }
+
+    function pushTrash(keybinds, item) {
+        let trash = (Array.isArray(keybinds.trash) ? keybinds.trash : []).filter(function(entry) {
+            return keybindsTabRoot.comboOf(entry) !== item.key;
+        });
+        trash.push(keybindsTabRoot.trashRecord(item));
+        keybinds.trash = trash;
+        return trash;
+    }
+
     function deleteCustomBind(entry) {
         if (!entry) return;
         let keybinds = keybindsTabRoot.keybindsSettings();
         let list = (Array.isArray(keybinds.custom) ? keybinds.custom : []).filter(function(item) {
             return !item || item.id !== entry.id;
         });
+        let record = {
+            id: entry.id,
+            key: entry.key,
+            command: entry.command,
+            description: entry.description || "",
+            kind: "custom"
+        };
         keybinds.custom = list;
-        Config.setSetting("keybinds", keybinds);
+        keybinds.removed = (Array.isArray(keybinds.removed) ? keybinds.removed : []).filter(function(item) {
+            return keybindsTabRoot.comboOf(item) !== entry.key;
+        });
+        let trash = keybindsTabRoot.pushTrash(keybinds, record);
+        keybindsTabRoot.saveKeybinds(keybinds);
         keybindsTabRoot.customBinds = list;
+        keybindsTabRoot.trashList = trash;
+        keybindsTabRoot.lastDeleted = record;
         keybindsTabRoot.syncCustomBinds();
     }
 
@@ -353,16 +456,110 @@ GuideTab {
         }
         if (!bind) return;
         let keybinds = keybindsTabRoot.keybindsSettings();
-        let removed = Array.isArray(keybinds.removed) ? keybinds.removed.slice() : [];
         let combo = keybindsTabRoot.comboFor(bind);
-        let exists = removed.some(function(item) {
-            let value = typeof item === "string" ? item : (item ? item.key : "");
-            return value === combo;
+        let removed = (Array.isArray(keybinds.removed) ? keybinds.removed : []).filter(function(item) {
+            return keybindsTabRoot.comboOf(item) !== combo;
         });
-        if (!exists) removed.push(combo);
+        let record = {
+            key: combo,
+            description: bind.description || "",
+            kind: "builtin"
+        };
+        removed.push(combo);
         keybinds.removed = removed;
-        Config.setSetting("keybinds", keybinds);
+        let trash = keybindsTabRoot.pushTrash(keybinds, record);
+        keybindsTabRoot.saveKeybinds(keybinds);
+        keybindsTabRoot.trashList = trash;
+        keybindsTabRoot.lastDeleted = keybindsTabRoot.trashRecord(record);
         keybindsTabRoot.syncCustomBinds();
+    }
+
+    function restoreRemoved(item) {
+        if (!item || !item.key) return;
+        let keybinds = keybindsTabRoot.keybindsSettings();
+        let trash = (Array.isArray(keybinds.trash) ? keybinds.trash : []).filter(function(entry) {
+            return keybindsTabRoot.comboOf(entry) !== item.key;
+        });
+        if (item.kind === "custom" && item.command) {
+            let custom = Array.isArray(keybinds.custom) ? keybinds.custom.slice() : [];
+            let exists = custom.some(function(entry) {
+                return entry && entry.key === item.key && (entry.command || "") === item.command;
+            });
+            if (!exists) {
+                custom.push({
+                    id: item.id || ("cb" + Date.now() + Math.floor(Math.random() * 1000)),
+                    key: item.key,
+                    command: item.command,
+                    description: item.description || item.command
+                });
+            }
+            keybinds.custom = custom;
+            keybindsTabRoot.customBinds = custom;
+        } else {
+            keybinds.removed = (Array.isArray(keybinds.removed) ? keybinds.removed : []).filter(function(entry) {
+                return keybindsTabRoot.comboOf(entry) !== item.key;
+            });
+        }
+        keybinds.trash = trash;
+        keybindsTabRoot.saveKeybinds(keybinds);
+        keybindsTabRoot.trashList = trash;
+        if (keybindsTabRoot.lastDeleted && keybindsTabRoot.lastDeleted.key === item.key) {
+            keybindsTabRoot.lastDeleted = null;
+        }
+        keybindsTabRoot.syncCustomBinds();
+    }
+
+    function restoreAllRemoved() {
+        let keybinds = keybindsTabRoot.keybindsSettings();
+        let trash = Array.isArray(keybinds.trash) ? keybinds.trash : [];
+        let custom = Array.isArray(keybinds.custom) ? keybinds.custom.slice() : [];
+        let restoredKeys = [];
+        for (let i = 0; i < trash.length; i++) {
+            let item = trash[i];
+            let key = keybindsTabRoot.comboOf(item);
+            if (!key) continue;
+            restoredKeys.push(key);
+            if (!item || typeof item === "string" || item.kind !== "custom" || !item.command) continue;
+            let exists = custom.some(function(entry) {
+                return entry && entry.key === item.key && (entry.command || "") === item.command;
+            });
+            if (!exists) {
+                custom.push({
+                    id: item.id || ("cb" + Date.now() + Math.floor(Math.random() * 1000) + i),
+                    key: item.key,
+                    command: item.command,
+                    description: item.description || item.command
+                });
+            }
+        }
+        keybinds.custom = custom;
+        keybinds.removed = (Array.isArray(keybinds.removed) ? keybinds.removed : []).filter(function(entry) {
+            return restoredKeys.indexOf(keybindsTabRoot.comboOf(entry)) === -1;
+        });
+        keybinds.trash = [];
+        keybindsTabRoot.saveKeybinds(keybinds);
+        keybindsTabRoot.customBinds = custom;
+        keybindsTabRoot.trashList = [];
+        keybindsTabRoot.lastDeleted = null;
+        keybindsTabRoot.syncCustomBinds();
+    }
+
+    function emptyTrash() {
+        let keybinds = keybindsTabRoot.keybindsSettings();
+        keybinds.trash = [];
+        keybindsTabRoot.saveKeybinds(keybinds);
+        keybindsTabRoot.trashList = [];
+        keybindsTabRoot.lastDeleted = null;
+        keybindsTabRoot.syncCustomBinds();
+    }
+
+    function undoLastDelete() {
+        let item = keybindsTabRoot.lastDeleted;
+        if (!item) return;
+        let stillThere = keybindsTabRoot.trashList.some(function(entry) {
+            return keybindsTabRoot.comboOf(entry) === item.key;
+        });
+        if (stillThere) keybindsTabRoot.restoreRemoved(item);
     }
 
     onVisibleChanged: {
@@ -377,6 +574,16 @@ GuideTab {
         syncSettings();
         reloadBinds();
         variablesView.reload();
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Z"
+        context: Qt.WindowShortcut
+        enabled: keybindsTabRoot.visible
+            && !keybindsTabRoot.anyPopupOpen
+            && !keybindsTabRoot.filterFocused
+            && keybindsTabRoot.lastDeleted !== null
+        onActivated: keybindsTabRoot.undoLastDelete()
     }
 
     Connections {
@@ -521,6 +728,7 @@ GuideTab {
                     searchable: false
 
                     Input {
+                        id: filterInput
                         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                         implicitWidth: rootObj.s(220)
                         implicitHeight: rootObj.s(32)
@@ -588,7 +796,81 @@ GuideTab {
                             iconFontSize: keybindsTabRoot.rootObj.s(14)
                             accentColor: ThemeBackend.surface1
                             textColor: ThemeBackend.red
-                            onClicked: deletePopup.openFor(modelData, customEntry)
+                            onClicked: keybindsTabRoot.deleteBind(modelData, customEntry)
+                        }
+                    }
+                }
+            }
+
+            SettingsBlob {
+                visible: keybindsTabRoot.isHyprland && keybindsTabRoot.trashView.length > 0
+
+                SettingsRow {
+                    rootObj: keybindsTabRoot.rootObj
+                    icon: "󰦛"
+                    title: I18n.t("guide.keybinds.removed.title", "Deleted shortcuts")
+                    description: I18n.t("guide.keybinds.removed.desc", {
+                        DAYS: keybindsTabRoot.trashDays
+                    })
+                    searchable: false
+
+                    ClickButton {
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                        implicitHeight: rootObj.s(32)
+                        buttonText: I18n.t("guide.keybinds.removed.restore_all", "Restore all")
+                        accentColor: ThemeBackend.surface0
+                        textColor: ThemeBackend.text
+                        cornerRadius: ThemeBackend.borderRadius
+                        horizontalPadding: rootObj.s(12)
+                        textFontSize: rootObj.s(11)
+                        onTriggered: keybindsTabRoot.restoreAllRemoved()
+                    }
+
+                    ClickButton {
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                        implicitHeight: rootObj.s(32)
+                        buttonText: I18n.t("guide.keybinds.removed.empty", "Empty trash")
+                        buttonIcon: "󰗨"
+                        accentColor: ThemeBackend.surface0
+                        textColor: ThemeBackend.red
+                        cornerRadius: ThemeBackend.borderRadius
+                        horizontalPadding: rootObj.s(12)
+                        iconFontSize: rootObj.s(13)
+                        textFontSize: rootObj.s(11)
+                        onTriggered: emptyTrashPopup.open()
+                    }
+                }
+
+                Repeater {
+                    model: keybindsTabRoot.trashView
+
+                    delegate: SettingsRow {
+                        required property var modelData
+                        rootObj: keybindsTabRoot.rootObj
+                        icon: "󰦛"
+                        title: keybindsTabRoot.prettyCombo(modelData.key)
+                        description: {
+                            let text = modelData.kind === "custom"
+                                ? (modelData.description || modelData.command || "")
+                                : keybindsTabRoot.localizedDescription({ description: modelData.description || "" });
+                            let days = keybindsTabRoot.daysLeft(modelData);
+                            let expires = I18n.t("guide.keybinds.removed.days_left", {
+                                N: days
+                            });
+                            return text === "" ? expires : (text + " · " + expires);
+                        }
+                        searchable: true
+
+                        IconButton {
+                            size: keybindsTabRoot.rootObj.s(28)
+                            Layout.preferredWidth: keybindsTabRoot.rootObj.s(28)
+                            Layout.preferredHeight: keybindsTabRoot.rootObj.s(28)
+                            cornerRadius: ThemeBackend.borderRadius
+                            buttonIcon: "󰦛"
+                            iconFontSize: keybindsTabRoot.rootObj.s(14)
+                            accentColor: ThemeBackend.surface1
+                            textColor: ThemeBackend.mauve
+                            onClicked: keybindsTabRoot.restoreRemoved(modelData)
                         }
                     }
                 }
@@ -967,7 +1249,7 @@ GuideTab {
     }
 
     Popup {
-        id: deletePopup
+        id: emptyTrashPopup
         parent: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj : undefined
         x: parent && parent.width > 0 ? Math.max(0, Math.round((parent.width - width) / 2)) : 0
         y: parent && parent.height > 0 ? Math.max(0, Math.round((parent.height - height) / 2)) : 0
@@ -977,28 +1259,19 @@ GuideTab {
         padding: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(20) : 20
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
-        property var bind: null
-        property var entry: null
-
-        function openFor(bind, entry) {
-            deletePopup.bind = bind;
-            deletePopup.entry = entry;
-            open();
-        }
-
         Connections {
             target: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj : null
             function onVisibleChanged() {
-                if (keybindsTabRoot.rootObj && !keybindsTabRoot.rootObj.visible) deletePopup.close();
+                if (keybindsTabRoot.rootObj && !keybindsTabRoot.rootObj.visible) emptyTrashPopup.close();
             }
         }
 
         background: Rectangle {
             radius: ThemeBackend.clampedBorderRadius
-            color: deleteGlass.active ? "transparent" : ThemeBackend.base
+            color: emptyTrashGlass.active ? "transparent" : ThemeBackend.base
 
             GlassFill {
-                id: deleteGlass
+                id: emptyTrashGlass
                 anchors.fill: parent
                 radius: parent.radius
                 tintColor: ThemeBackend.base
@@ -1014,7 +1287,7 @@ GuideTab {
 
                 Text {
                     Layout.fillWidth: true
-                    text: I18n.t("guide.keybinds.delete.title", "Remove shortcut?")
+                    text: I18n.t("guide.keybinds.trash.title", "Empty the trash?")
                     color: ThemeBackend.text
                     font.family: ThemeBackend.fontFamily
                     font.pixelSize: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(16) : 16
@@ -1026,28 +1299,18 @@ GuideTab {
                     size: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(30) : 30
                     cornerRadius: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(8) : 8
                     iconFontSize: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(14) : 14
-                    onClicked: deletePopup.close()
+                    onClicked: emptyTrashPopup.close()
                 }
             }
 
             Text {
                 Layout.fillWidth: true
-                text: I18n.t("guide.keybinds.delete.desc", {
-                    COMBO: deletePopup.bind ? keybindsTabRoot.comboFor(deletePopup.bind) : ""
+                text: I18n.t("guide.keybinds.trash.desc", {
+                    COUNT: keybindsTabRoot.trashView.length
                 })
                 color: ThemeBackend.subtext0
                 font.family: ThemeBackend.fontFamily
                 font.pixelSize: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(13) : 13
-                wrapMode: Text.WordWrap
-            }
-
-            Text {
-                Layout.fillWidth: true
-                visible: deletePopup.entry === null
-                text: I18n.t("guide.keybinds.delete.builtin_hint", "Built-in shortcuts are disabled through keybinds.removed and stay disabled after a reload.")
-                color: ThemeBackend.peach
-                font.family: ThemeBackend.fontFamily
-                font.pixelSize: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(11) : 11
                 wrapMode: Text.WordWrap
             }
 
@@ -1059,18 +1322,18 @@ GuideTab {
 
                 ClickButton {
                     implicitHeight: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(34) : 34
-                    buttonText: I18n.t("guide.keybinds.delete.cancel", "Cancel")
+                    buttonText: I18n.t("guide.keybinds.trash.cancel", "Cancel")
                     accentColor: ThemeBackend.surface0
                     textColor: ThemeBackend.text
                     cornerRadius: ThemeBackend.borderRadius
                     horizontalPadding: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(14) : 14
                     textFontSize: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(12) : 12
-                    onTriggered: deletePopup.close()
+                    onTriggered: emptyTrashPopup.close()
                 }
 
                 ClickButton {
                     implicitHeight: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(34) : 34
-                    buttonText: I18n.t("guide.keybinds.delete.confirm", "Remove")
+                    buttonText: I18n.t("guide.keybinds.trash.confirm", "Delete forever")
                     buttonIcon: "󰗨"
                     accentColor: ThemeBackend.red
                     textColor: ThemeBackend.crust
@@ -1079,10 +1342,8 @@ GuideTab {
                     iconFontSize: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(15) : 15
                     textFontSize: keybindsTabRoot.rootObj ? keybindsTabRoot.rootObj.s(12) : 12
                     onTriggered: {
-                        let bind = deletePopup.bind;
-                        let entry = deletePopup.entry;
-                        deletePopup.close();
-                        keybindsTabRoot.deleteBind(bind, entry);
+                        emptyTrashPopup.close();
+                        keybindsTabRoot.emptyTrash();
                     }
                 }
             }

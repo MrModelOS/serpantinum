@@ -227,7 +227,8 @@ The configuration file is located at `~/.config/serpantinum/settings.json` (or `
 | :--- | :--- | :--- | :--- |
 | `keybinds.descriptions` | `object` | `{}` | Custom shortcut descriptions, keyed by the original combination and description. Set from **Settings → Keybinds** with the pencil button. |
 | `keybinds.custom` | `array` | `[]` | User-defined shortcuts. Each entry accepts `id`, `key` (for example `"SUPER + SHIFT + T"`), `command`, and `description`. Applied to Hyprland through the generated `~/.config/hypr/config/keybinds_custom.lua`. |
-| `keybinds.removed` | `array` | `[]` | Shortcut combinations removed with the trash button, including built-in ones. Each entry is stored as a combination string such as `"SUPER + SPACE"` and applied with `hl.unbind` in the generated `keybinds_custom.lua`. |
+| `keybinds.removed` | `array` | `[]` | Built-in shortcut combinations removed with the trash button. Each entry is stored as a combination string such as `"SUPER + SPACE"` and applied with `hl.unbind` in the generated `keybinds_custom.lua`. |
+| `keybinds.trash` | `array` | `[]` | Deleted shortcuts kept for 30 days. Each entry stores `key`, `command`, `description`, `kind` (`"custom"` or `"builtin"`), and `deletedAt` (Unix time in milliseconds). Restoring removes the entry from the trash; expired entries are dropped on the next settings read. |
 
 ### Inputs
 

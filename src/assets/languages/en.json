@@ -1203,12 +1203,12 @@
         "title": "Edit description",
         "hint": "Leave empty to use the default description."
       },
-      "delete": {
-        "title": "Remove shortcut?",
-        "desc": "The shortcut \"{COMBO}\" will be removed. This cannot be undone.",
-        "builtin_hint": "Built-in shortcuts are disabled through keybinds.removed and stay disabled after a reload.",
-        "cancel": "Cancel",
-        "confirm": "Remove"
+      "removed": {
+        "title": "Deleted shortcuts",
+        "desc": "They can be restored for {DAYS} days, then they are deleted permanently. Ctrl+Z restores the last deleted shortcut.",
+        "restore_all": "Restore all",
+        "empty": "Empty trash",
+        "days_left": "{N} days left"
       },
       "shortcuts": {
         "title": "Keyboard Shortcuts",
@@ -1218,6 +1218,12 @@
       "unsupported": {
         "title": "Keybinds",
         "desc": "This tab currently supports Hyprland only."
+      },
+      "trash": {
+        "title": "Empty the trash?",
+        "desc": "{COUNT} shortcut(s) will be deleted forever. Built-in shortcuts stay disabled and cannot be restored.",
+        "cancel": "Cancel",
+        "confirm": "Delete forever"
       }
     },
     "weather": {

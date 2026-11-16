@@ -75,7 +75,7 @@ for i = 1, 10 do
 end
 ```
 
-Custom shortcuts created with **+** in the Keybinds tab are stored in `settings.json` as `keybinds.custom` and written to `config/keybinds_custom.lua`, which `config/keybinds.lua` loads at the end. The trash button on any row asks for confirmation and then removes that shortcut: custom entries are dropped from `keybinds.custom`, and built-in ones are added to `keybinds.removed` and unbound with `hl.unbind` in the same generated file. The generated file is rewritten on every change and must not be edited by hand.
+Custom shortcuts created with **+** in the Keybinds tab are stored in `settings.json` as `keybinds.custom` and written to `config/keybinds_custom.lua`, which `config/keybinds.lua` loads at the end. The trash button on any row moves that shortcut to `keybinds.trash` without asking: custom entries are dropped from `keybinds.custom`, and built-in ones are added to `keybinds.removed` and unbound with `hl.unbind` in the same generated file. Trashed shortcuts can be restored from the **Deleted shortcuts** section or with `Ctrl+Z` within 30 days; after that they are deleted permanently. **Empty trash** asks for confirmation and deletes the whole list at once. The generated file is rewritten on every change and must not be edited by hand.
 
 Quick utility actions:
 - Lock screen: `serpantinum lock`
