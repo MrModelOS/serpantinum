@@ -55,33 +55,21 @@ hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 5, bezier =
 
 local layoutMode = _G.layoutMode or "mixed"
 
-local floatingClasses = {
-  "pavucontrol",
-  "org.pulseaudio.pavucontrol",
-  "blueman-manager",
-  "nm-connection-editor",
-  "nwg-look",
-  "lxappearance",
-  "qt6ct",
-  "kvantummanager",
-}
-
-local function isUtilityWindow(w)
-  local class = w.class or ""
-  for _, cls in ipairs(floatingClasses) do
-    if class == cls then return true end
-  end
-  local title = w.title or ""
-  return title:match("^Open ") ~= nil
-    or title:match("^Save ") ~= nil
-    or title:match("^Choose ") ~= nil
-    or title:match("^Select ") ~= nil
-    or title:match("^Pick ") ~= nil
+local function set_snap(enabled)
+  pcall(function()
+    hl.config({ ["general.snap.enabled"] = enabled })
+  end)
 end
 
-local function float_window(w)
+local function floats_everything(mode)
+  return mode == "mixed" or mode == "floating"
+end
+
+local function float_window(w, center)
   hl.dispatch(hl.dsp.window.float({ action = "set", window = w }))
-  hl.dispatch(hl.dsp.window.center({ window = w }))
+  if center ~= false then
+    hl.dispatch(hl.dsp.window.center({ window = w }))
+  end
 end
 
 local function tile_window(w)
@@ -93,11 +81,12 @@ function apply_layout_mode(mode)
     mode = "mixed"
   end
   _G.layoutMode = mode
+  set_snap(mode == "mixed")
+  local float_all = floats_everything(mode)
   for _, w in ipairs(hl.get_windows()) do
-    if w.fullscreen == 0 then
-      local want_float = mode == "floating" or (mode == "mixed" and isUtilityWindow(w))
-      if want_float then
-        float_window(w)
+    if (w.fullscreen or 0) == 0 then
+      if float_all then
+        float_window(w, false)
       else
         tile_window(w)
       end
@@ -105,28 +94,21 @@ function apply_layout_mode(mode)
   end
 end
 
-if layoutMode == "floating" then
+-- Mixed behaves like GNOME's Tiling Assistant: windows float, can be dragged
+-- freely and snap to screen edges and to each other. Floating skips snapping.
+set_snap(layoutMode == "mixed")
+
+if floats_everything(layoutMode) then
   hl.window_rule({ float = true, center = true, match = { class = ".*" } })
 elseif layoutMode == "tiling" then
   hl.window_rule({ tile = true, match = { class = ".*" } })
-else
-  for _, cls in ipairs(floatingClasses) do
-    hl.window_rule({ float = true, center = true, match = { class = "^" .. cls .. "$" } })
-  end
-  hl.window_rule({
-    float = true,
-    center = true,
-    match = { title = "^(Open|Save|Choose|Select|Pick)[[:space:]].*" },
-  })
 end
 
 hl.on("window.open", function(w)
   local mode = _G.layoutMode or "mixed"
-  if mode == "floating" then
+  if floats_everything(mode) then
     float_window(w)
   elseif mode == "tiling" then
     tile_window(w)
-  elseif isUtilityWindow(w) then
-    float_window(w)
   end
 end)

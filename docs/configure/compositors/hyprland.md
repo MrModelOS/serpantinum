@@ -25,10 +25,10 @@ layoutMode = "mixed"
 ```
 
 - `tiling` - every window tiles; floating is disabled.
-- `mixed` - applications tile, dialogs and utilities float centered (default).
-- `floating` - every window floats and opens centered.
+- `mixed` - windows float, can be dragged freely and snap to screen edges and to each other, similar to GNOME's Tiling Assistant. Keyboard shortcuts keep working (default).
+- `floating` - every window floats freely and opens centered.
 
-Change it from **Settings → Keybinds** or from the command line:
+Change it from **Settings → General** or from the command line:
 
 ```bash
 serpantinum layout tiling
@@ -37,6 +37,8 @@ serpantinum layout floating
 ```
 
 The value is also stored in `settings.json` as `windowLayout.mode`, so the last selected mode is restored on the next login. Floating and tiled states of already-open windows are updated immediately.
+
+In `mixed` and `floating` modes you can send a window to another workspace with the mouse: drag it to the left or right edge of the screen and release it. The window moves to the previous or next workspace while you stay on the current one.
 
 ## Autostart
 
@@ -64,7 +66,7 @@ Shell overlays and controls are bound in `config/keybinds.lua` using `serpantinu
 - `calendar` - calendar popout
 - `network` - wi-fi and network connections
 - `volume` - audio output and input slider
-- `settings` - open Serpantinum settings; the **Keybinds** tab lists all active shortcuts, lets you edit or translate their descriptions, switch the window layout mode, and add your own shortcuts with the **+** button
+- `settings` - open Serpantinum settings; the **General** tab switches the window layout mode, and the **Keybinds** tab lists all active shortcuts, lets you edit or translate their descriptions, and add your own shortcuts with the **+** button
 
 Workspace switching is routed through the shell to update bar indicators:
 

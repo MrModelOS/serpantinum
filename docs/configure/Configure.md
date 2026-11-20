@@ -219,7 +219,7 @@ The configuration file is located at `~/.config/serpantinum/settings.json` (or `
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `windowLayout.mode` | `string` | `"mixed"` | How windows are placed: `"tiling"` tiles every window, `"mixed"` tiles applications and floats dialogs and utilities, `"floating"` floats and centers every window. On Hyprland the mode is applied live and mirrored into `~/.config/hypr/config/variables.lua`. |
+| `windowLayout.mode` | `string` | `"mixed"` | How windows are placed: `"tiling"` tiles every window, `"mixed"` floats windows with edge and window snapping (like GNOME's Tiling Assistant), `"floating"` floats windows freely. On Hyprland the mode is applied live and mirrored into `~/.config/hypr/config/variables.lua`. |
 
 ### Keybinds
 

@@ -220,6 +220,19 @@
         "title": "Quickactions",
         "desc": "Enable floating quickactions overlay"
       },
+      "layout": {
+        "title": "Window layout",
+        "tiling": "Tiling",
+        "mixed": "Mixed",
+        "floating": "Floating",
+        "tiling_desc": "Every window tiles automatically; floating is disabled.",
+        "mixed_desc": "Windows float and snap to screen edges and each other, while shortcuts keep working.",
+        "floating_desc": "Every window floats freely and opens centered.",
+        "workspace_drag": {
+          "title": "Move windows between workspaces",
+          "desc": "In mixed and floating modes, drag a window to the left or right screen edge and release it to send it to the previous or next workspace."
+        }
+      },
       "location": {
         "title": "Location",
         "desc": "Configure location for automatic sun schedule and weather",
@@ -1129,15 +1142,6 @@
       }
     },
     "keybinds": {
-      "layout": {
-        "title": "Window Layout",
-        "tiling": "Tiling",
-        "mixed": "Mixed",
-        "floating": "Floating",
-        "tiling_desc": "Every window tiles; floating is disabled.",
-        "mixed_desc": "Applications tile, dialogs and utilities float centered.",
-        "floating_desc": "Every window floats and opens centered."
-      },
       "descriptions": {
         "move_window": "Move window",
         "resize_window": "Resize window",

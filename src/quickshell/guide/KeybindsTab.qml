@@ -17,11 +17,8 @@ GuideTab {
         return Quickshell.env("HOME") + "/.local/share/serpantinum/src";
     }
 
-    property var defaultWindowLayout: ({ "mode": "mixed" })
-    property string layoutMode: "mixed"
     property var allBinds: []
     property string bindFilter: ""
-    property bool layoutReconciled: false
     property var customDescriptions: ({})
     property var customBinds: []
     property var trashList: []
@@ -56,8 +53,6 @@ GuideTab {
             return haystack.indexOf(query) !== -1;
         });
     }
-
-    readonly property var layoutOptions: ["tiling", "mixed", "floating"]
 
     function saveKeybinds(keybinds) {
         if (typeof Config === "undefined" || !Config.setSetting) return;
@@ -99,13 +94,6 @@ GuideTab {
     }
 
     function syncSettings() {
-        let settings = (typeof Config !== "undefined" && Config.getSetting)
-            ? Config.getSetting("windowLayout", keybindsTabRoot.defaultWindowLayout)
-            : keybindsTabRoot.defaultWindowLayout;
-        let mode = settings && settings.mode ? settings.mode : "mixed";
-        if (mode !== "tiling" && mode !== "mixed" && mode !== "floating") mode = "mixed";
-        keybindsTabRoot.layoutMode = mode;
-
         let keybinds = (typeof Config !== "undefined" && Config.getSetting)
             ? Config.getSetting("keybinds", ({}))
             : ({});
@@ -119,29 +107,6 @@ GuideTab {
         keybindsTabRoot.customBinds = custom;
 
         keybindsTabRoot.trashList = keybindsTabRoot.purgeTrash(keybinds);
-    }
-
-    function setLayoutMode(mode) {
-        if (mode !== "tiling" && mode !== "mixed" && mode !== "floating") return;
-        keybindsTabRoot.layoutMode = mode;
-        keybindsTabRoot.layoutReconciled = true;
-        if (typeof Config !== "undefined" && Config.setSetting) {
-            Config.setSetting("windowLayout", { "mode": mode });
-        }
-        layoutProcess.command = ["bash", keybindsTabRoot.scriptsDir + "/scripts/layout.sh", mode];
-        layoutProcess.running = true;
-    }
-
-    function modeTitle(mode) {
-        if (mode === "tiling") return I18n.t("guide.keybinds.layout.tiling", "Tiling");
-        if (mode === "floating") return I18n.t("guide.keybinds.layout.floating", "Floating");
-        return I18n.t("guide.keybinds.layout.mixed", "Mixed");
-    }
-
-    function modeDescription(mode) {
-        if (mode === "tiling") return I18n.t("guide.keybinds.layout.tiling_desc", "Every window tiles; floating is disabled.");
-        if (mode === "floating") return I18n.t("guide.keybinds.layout.floating_desc", "Every window floats and opens centered.");
-        return I18n.t("guide.keybinds.layout.mixed_desc", "Applications tile, dialogs and utilities float centered.");
     }
 
     function reloadBinds() {
@@ -566,14 +531,12 @@ GuideTab {
         if (visible) {
             syncSettings();
             reloadBinds();
-            variablesView.reload();
         }
     }
 
     Component.onCompleted: {
         syncSettings();
         reloadBinds();
-        variablesView.reload();
     }
 
     Shortcut {
@@ -619,11 +582,6 @@ GuideTab {
     }
 
     Process {
-        id: layoutProcess
-        running: false
-    }
-
-    Process {
         id: syncProcess
         running: false
 
@@ -636,22 +594,6 @@ GuideTab {
         id: refreshTimer
         interval: 600
         onTriggered: keybindsTabRoot.reloadBinds()
-    }
-
-    FileView {
-        id: variablesView
-        path: (typeof Config !== "undefined" ? Config.homeDir : Quickshell.env("HOME")) + "/.config/hypr/config/variables.lua"
-        watchChanges: false
-
-        onLoaded: {
-            if (!keybindsTabRoot.isHyprland || keybindsTabRoot.layoutReconciled) return;
-            keybindsTabRoot.layoutReconciled = true;
-            let raw = typeof text === "function" ? text() : text;
-            let match = String(raw || "").match(/layoutMode\s*=\s*["']([^"']+)["']/);
-            if (match && match[1] !== keybindsTabRoot.layoutMode) {
-                keybindsTabRoot.setLayoutMode(keybindsTabRoot.layoutMode);
-            }
-        }
     }
 
     Flickable {
@@ -668,42 +610,6 @@ GuideTab {
             id: settingsCol
             width: parent.width
             spacing: rootObj.s(6)
-
-            SettingsBlob {
-                visible: keybindsTabRoot.isHyprland
-
-                SettingsRow {
-                    rootObj: keybindsTabRoot.rootObj
-                    icon: "󰕰"
-                    title: I18n.t("guide.keybinds.layout.title", "Window Layout")
-                    description: keybindsTabRoot.modeDescription(keybindsTabRoot.layoutMode)
-
-                    Dropdown {
-                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                        implicitWidth: rootObj.s(180)
-                        implicitHeight: rootObj.s(32)
-                        options: [
-                            keybindsTabRoot.modeTitle("tiling"),
-                            keybindsTabRoot.modeTitle("mixed"),
-                            keybindsTabRoot.modeTitle("floating")
-                        ]
-                        currentIndex: Math.max(0, keybindsTabRoot.layoutOptions.indexOf(keybindsTabRoot.layoutMode))
-                        accentColor: ThemeBackend.mauve
-                        baseColor: ThemeBackend.surface0
-                        hoverColor: ThemeBackend.surface1
-                        dropdownColor: ThemeBackend.surface0
-                        borderColor: Qt.alpha(ThemeBackend.surface2, 0.6)
-                        textColor: ThemeBackend.text
-                        activeTextColor: ThemeBackend.crust
-                        fontPixelSize: rootObj.s(11)
-                        onValueChanged: function(index, value) {
-                            let mode = keybindsTabRoot.layoutOptions[index];
-                            if (mode === keybindsTabRoot.layoutMode) return;
-                            keybindsTabRoot.setLayoutMode(mode);
-                        }
-                    }
-                }
-            }
 
             SettingsBlob {
                 visible: !keybindsTabRoot.isHyprland

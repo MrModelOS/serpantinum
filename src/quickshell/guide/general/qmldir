@@ -3,6 +3,7 @@ AvatarPreview 1.0 AvatarPreview.qml
 GeneralProfileSection 1.0 GeneralProfileSection.qml
 GeneralAudioSection 1.0 GeneralAudioSection.qml
 GeneralBehaviorSection 1.0 GeneralBehaviorSection.qml
+GeneralWindowSection 1.0 GeneralWindowSection.qml
 GeneralLocationSection 1.0 GeneralLocationSection.qml
 GeneralPresetsTab 1.0 GeneralPresetsTab.qml
 SettingsPresetCard 1.0 SettingsPresetCard.qml

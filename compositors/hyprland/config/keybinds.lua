@@ -5,6 +5,49 @@ hl.gesture({ fingers = 3, direction = "horizontal", action = "workspace" })
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Move window" })
 hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })
 
+-- In mixed and floating layouts, dropping a window on the left or right screen
+-- edge sends it to the previous or next workspace. Windows stay where they are
+-- in tiling mode, where the edge is used by the layout itself.
+local function move_window_to_adjacent_workspace()
+  local mode = _G.layoutMode or "mixed"
+  if mode == "tiling" then return end
+
+  local w = hl.get_active_window()
+  if not w or not w.floating or (w.fullscreen or 0) ~= 0 then return end
+  if w.workspace and w.workspace.special then return end
+
+  local pos = hl.get_cursor_pos()
+  local mon = hl.get_monitor_at_cursor()
+  if not pos or not mon or not mon.width then return end
+
+  -- Cursor coordinates are logical, while monitor width is in physical pixels.
+  local scale = mon.scale or 1
+  local mon_width = mon.width / scale
+  local edge = math.max(24, math.floor(mon_width * 0.02))
+  local from_left = pos.x - mon.x
+  local from_right = mon.x + mon_width - pos.x
+  local direction = nil
+  local probe = nil
+
+  if from_left <= edge then
+    direction = "r-1"
+    probe = pos.x - edge
+  elseif from_right <= edge then
+    direction = "r+1"
+    probe = pos.x + edge
+  else
+    return
+  end
+
+  local neighbor = hl.get_monitor_at(probe, pos.y)
+  if neighbor and neighbor.name ~= mon.name then return end
+
+  hl.dispatch(hl.dsp.window.move({ window = w, workspace = direction, follow = false }))
+end
+
+-- No description so the helper bind stays out of the readable shortcut list.
+hl.bind(mainMod .. " + mouse:272", move_window_to_adjacent_workspace, { drag = true, transparent = true })
+
 hl.bind(mainMod .. " + SHIFT + Left", hl.dsp.window.resize({ x = -50, y = 0, relative = true }), { repeating = true, description = "Resize window left" })
 hl.bind(mainMod .. " + SHIFT + Right", hl.dsp.window.resize({ x = 50, y = 0, relative = true }), { repeating = true, description = "Resize window right" })
 hl.bind(mainMod .. " + SHIFT + Up", hl.dsp.window.resize({ x = 0, y = -50, relative = true }), { repeating = true, description = "Resize window up" })

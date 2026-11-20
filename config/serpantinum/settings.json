@@ -47,6 +47,9 @@
       ]
     }
   },
+  "windowLayout": {
+    "mode": "mixed"
+  },
   "theme": {
     "fontFamily": "Adwaita Mono",
     "borderRadius": 10,
